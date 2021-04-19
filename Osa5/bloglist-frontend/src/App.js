@@ -1,21 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Blog from './components/Blog'
+import Users from './components/Users'
 import blogService from './services/blogs'
 import loginService from './services/login'
 import NewBLogForm from './components/NewBlogForm'
-import Togglable from  './components/Toggleable'
+import Togglable from './components/Toggleable'
+import SingleUser from './components/SingleUser'
+import SingleBlog from './components/SingleBlog'
+import { useDispatch, useSelector } from 'react-redux'
+import { initializeBlogs, addBlog, likeBlog, removeBlog } from './reducers/blogReducer'
+import { login, logout, loadLogin } from './reducers/userReducer'
+import userService from './services/users'
+import {
+  BrowserRouter as Router,
+  Switch,
+  Route,
+  Link,
+  Redirect,
+  useRouteMatch,
+  useHistory,
+} from "react-router-dom"
 
 
 
 
 const App = () => {
-  const [blogs, setBlogs] = useState([])
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [user, setUser] = useState(null)
+  const [users, setUsers] = useState([])
+
 
   const blogFormRef = useRef()
-  
+
+  const dispatch = useDispatch()
+
+  const blogs = useSelector(state => state.blogs)
+
+  const user = useSelector(state => state.user)
+
 
 
 
@@ -26,60 +48,49 @@ const App = () => {
     event.preventDefault()
     console.log('logging in with', username, password)
 
-    try {
-      const user = await loginService.login({
-        username, password,
-      })
 
-      window.localStorage.setItem(
-        'loggedBlogappUser', JSON.stringify(user)
-      )
+    dispatch(login(username, password))
 
-      blogService.setToken(user.token)
-      setUser(user)
-      setUsername('')
-      setPassword('')
-    } catch (exception) {
+    setUsername('')
+    setPassword('')
+    {
       setTimeout(() => {
       }, 5000)
     }
   }
 
-  
 
 
 
 
-const addNewBlog = (blogObject) => {
-  blogFormRef.current.toggleVisibility()
-  blogService
-    .create(blogObject)
-    .then(returnedBlog => {
-      setBlogs(blogs.concat(returnedBlog))
-    })
-}
 
-const blogForm = () => (
-  <Togglable buttonLabel='new blog' ref={blogFormRef}>
-    <NewBLogForm createNewBlog={addNewBlog} />
-  </Togglable>
-)
+  const addNewBlog = (blogObject) => {
+    blogFormRef.current.toggleVisibility()
+
+    dispatch(addBlog(blogObject))
+  }
+
+  const blogForm = () => (
+    <Togglable buttonLabel='new blog' ref={blogFormRef}>
+      <NewBLogForm createNewBlog={addNewBlog} />
+    </Togglable>
+  )
 
 
   useEffect(() => {
-    blogService.getAll().then(blogs =>
-      setBlogs(blogs)
-    )
+    dispatch(initializeBlogs())
+
+  }, [dispatch])
+
+  useEffect(() => {
+
+    dispatch(loadLogin())
   }, [])
 
   useEffect(() => {
-    const loggedUserJSON = window.localStorage.getItem('loggedBlogappUser')
-    if (loggedUserJSON) {
-      const user = JSON.parse(loggedUserJSON)
-      setUser(user)
-      blogService.setToken(user.token)
+    userService.getAll().then(jusers => setUsers(jusers))
 
-    }
+
   }, [])
 
   const loginForm = () => (
@@ -109,42 +120,132 @@ const blogForm = () => (
     </form>
   )
 
-  const logout = () => {
+  const logout1 = () => {
     console.log("ulos")
-
-    window.localStorage.removeItem('loggedBlogappUser')
-    window.location.reload(false);
+    dispatch(logout())
   }
 
-  
+  const likeBLogI = (id) => {
+    const blog = blogs.find(elem => elem._id === id)
+    const newBlog = { ...blog, likes: blog.likes + 1 }
+    console.log("new blog", newBlog)
+    dispatch(likeBlog(id, newBlog))
 
-  
+  }
+
+  const removeBlogI = (id) => {
+    console.log("remove blog")
+    dispatch(removeBlog(id))
+
+  }
+
+
+
+
 
   const blogsDiv = () => (
+    <div style={{ marginTop: 100 }}>
+
+      <h2>Blogs</h2>
+      <p style={{ marginTop: 50 }}>{user.username} logged in</p>
+
+      <button style={{ marginTop: 30, marginBottom: 30 }} onClick={(logout1)}>
+        Logout
+     </button>
+
+      {blogForm()}
+
+
+
+      {blogs.map(blog =>
+        <Blog key={blog.id} blog={blog} likeBlog={likeBLogI} removeBlog={removeBlogI} />
+      )}
+    </div>
+  )
+
+  const match = useRouteMatch('/users/:id')
+  const singleUser = match
+    ? users.find(us => us.id === match.params.id)
+    : null
+
+
+  const match2 = useRouteMatch('/blogs/:id')
+  const singleBlog = match2
+    ? blogs.find(bl => bl._id === match2.params.id)
+    : null
+
+  const padding = { padding: 5 }
+
+  const helperDiv = () => (
     <div>
 
       <h2>blogs</h2>
       <p>{user.username} logged in</p>
 
-      <button onClick={(logout)}>
+      <button onClick={(logout1)}>
         Logout
-     </button>
+      </button>
 
-     {blogForm()}
 
-  
-
-      {blogs.map(blog =>
-        <Blog key={blog.id} blog={blog} />
-      )}
     </div>
   )
 
-  return (
-    <div>
 
-      {user === null && loginForm()}
-      {user !== null && blogsDiv()}
+
+  return (
+
+
+    <div class="container">
+
+
+      <div>
+        <Link style={padding} to="/">home</Link>
+        <Link style={padding} to="/blogs">blogs</Link>
+        <Link style={padding} to="/users">users</Link>
+
+      </div>
+
+
+      <Switch>
+        <Route path="/users/:id">
+
+          {user !== null && helperDiv()}
+
+
+
+
+          <SingleUser singleUser={singleUser} />
+
+        </Route>
+
+        <Route path="/blogs/:id">
+
+          {user !== null && helperDiv()}
+
+
+
+
+          <SingleBlog singleBlog={singleBlog} />
+
+        </Route>
+
+        <Route path="/blogs">
+          {blogs.map(blog =>
+            <Blog key={blog.id} blog={blog} likeBlog={likeBLogI} removeBlog={removeBlogI} />
+          )}
+        </Route>
+
+        <Route path="/users">
+          <Users users={users} />
+        </Route>
+
+        <Route path="/">
+          {user === null && loginForm()}
+          {user !== null && blogsDiv()}
+          {user !== null && <Users users={users} />}
+        </Route>
+      </Switch>
+
 
 
     </div>
